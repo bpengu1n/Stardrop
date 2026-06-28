@@ -25,13 +25,21 @@ namespace Stardrop.Utilities.External
         {
             var smapiInfo = new FileInfo(Pathing.GetSmapiPath());
 
-            var fileName = smapiInfo.FullName;
-            var arguments = string.Empty;
+            var processInfo = new ProcessStartInfo
+            {
+                FileName = smapiInfo.FullName,
+                WorkingDirectory = smapiInfo.DirectoryName,
+                RedirectStandardOutput = false,
+                RedirectStandardError = false,
+                CreateNoWindow = hideConsole,
+                UseShellExecute = false
+            };
+
             var parsedModPath = string.Empty;
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) is true)
             {
-                fileName = "/usr/bin/env";
-                arguments = $"bash -c \"SMAPI_MODS_PATH='{Pathing.GetSelectedModsFolderPath()}' '{Pathing.GetSmapiPath().Replace("StardewModdingAPI.dll", "StardewValley")}'\"";
+                processInfo.FileName = "/usr/bin/env";
+                processInfo.Arguments = $"bash -c \"SMAPI_MODS_PATH='{Pathing.GetSelectedModsFolderPath()}' '{Pathing.GetSmapiPath().Replace("StardewModdingAPI.dll", "StardewValley")}'\"";
                 parsedModPath = $"'{Pathing.GetSelectedModsFolderPath()}'";
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) is true)
@@ -52,10 +60,23 @@ namespace Stardrop.Utilities.External
                     $"exec {ShellQuote(smapiPath)} --mods-path {ShellQuote(selectedModsPath)}\n"
                 );
 
-                Process.Start("chmod", $"+x {ShellQuote(scriptPath)}");
+                var chmodInfo = new ProcessStartInfo
+                {
+                    FileName = "chmod",
+                    UseShellExecute = false,
+                };
+                chmodInfo.ArgumentList.Add("+x");
+                chmodInfo.ArgumentList.Add(scriptPath);
 
-                fileName = "/usr/bin/open";
-                arguments = $"-a Terminal {ShellQuote(scriptPath)}";
+                using (var chmod = Process.Start(chmodInfo))
+                {
+                    chmod.WaitForExit();
+                }
+
+                processInfo.FileName = "/usr/bin/open";
+                processInfo.ArgumentList.Add("-a");
+                processInfo.ArgumentList.Add("Terminal");
+                processInfo.ArgumentList.Add(scriptPath);
                 parsedModPath = selectedModsPath;
 
                 /* Alternative route (using AppleScript) of activating Terminal + SMAPI
@@ -73,17 +94,10 @@ namespace Stardrop.Utilities.External
                 parsedModPath = Pathing.GetSelectedModsFolderPath();
             }
 
-            Program.helper.Log($"Starting SMAPI with the following arguments: {arguments}");
-            var processInfo = new ProcessStartInfo
-            {
-                FileName = fileName,
-                Arguments = arguments,
-                WorkingDirectory = smapiInfo.DirectoryName,
-                RedirectStandardOutput = false,
-                RedirectStandardError = false,
-                CreateNoWindow = hideConsole,
-                UseShellExecute = false
-            };
+            var loggedArguments = processInfo.ArgumentList.Count > 0
+                ? string.Join(' ', processInfo.ArgumentList)
+                : processInfo.Arguments;
+            Program.helper.Log($"Starting SMAPI with the following arguments: {loggedArguments}");
 
             // Set SMAPI_MODS_PATH EnvironmentVariable if required
             if (string.IsNullOrEmpty(parsedModPath) is false)
