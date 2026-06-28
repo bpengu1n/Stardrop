@@ -36,9 +36,27 @@ namespace Stardrop.Utilities.External
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX) is true)
             {
+                var smapiPath = Pathing.GetSmapiPath()
+                    .Replace("StardewModdingAPI.dll", "StardewModdingAPI");
+
+                var selectedModsPath = Pathing.GetSelectedModsFolderPath();
+
+                var scriptPath = Path.Combine(
+                    Path.GetTempPath(),
+                    $"stardrop-smapi-{Guid.NewGuid():N}.command"
+                );
+
+                File.WriteAllText(
+                    scriptPath,
+                    "#!/bin/zsh\n" +
+                    $"exec {ShellQuote(smapiPath)} --mods-path {ShellQuote(selectedModsPath)}\n"
+                );
+
+                Process.Start("chmod", $"+x {ShellQuote(scriptPath)}");
+
                 fileName = "/usr/bin/open";
-                arguments = $"-a \"Terminal\" \"{Pathing.GetSmapiPath().Replace("StardewModdingAPI.dll", "StardewModdingAPI")}\" --args --mods-path \"{Pathing.GetSelectedModsFolderPath()}\"";
-                parsedModPath = $"{Pathing.GetSelectedModsFolderPath()}";
+                arguments = $"-a Terminal {ShellQuote(scriptPath)}";
+                parsedModPath = selectedModsPath;
 
                 /* Alternative route (using AppleScript) of activating Terminal + SMAPI
                 fileName = "/usr/bin/env";
@@ -169,6 +187,11 @@ namespace Stardrop.Utilities.External
             }
 
             return SemVersion.Parse($"{smapiAssembly.Version.Major}.{smapiAssembly.Version.Minor}.{smapiAssembly.Version.Build}", SemVersionStyles.Any);
+        }
+
+        private static string ShellQuote(string value)
+        {
+            return "'" + value.Replace("'", "'\"'\"'") + "'";
         }
     }
 }
